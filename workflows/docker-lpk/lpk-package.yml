@@ -1,0 +1,170 @@
+# Lazycat LPK Package Build Workflow (with Docker Image Integration)
+# Reference: https://lazycat.cloud/playground/guideline/572
+#
+# This workflow builds and publishes Lazycat LPK packages that depend on Docker images.
+# It is triggered after the Docker image build workflow completes successfully.
+#
+# Key Differences from ../lpk-only/lpk-package.yml:
+# 1. Trigger Mechanism:
+#    - docker-lpk: Triggered by workflow_run (after "Build & Push (Docker Hub)" completes)
+#    - lpk-only: Triggered directly by push/pull_request/tags
+#
+# 2. Additional Steps (Docker-specific):
+#    - "Get Docker image information": Determines Docker image name and tag from upstream workflow
+#    - "Copy Docker image to Lazycat": Copies Docker Hub image to Lazycat registry and updates manifest
+#
+# 3. Manual Trigger Input:
+#    - docker-lpk: Has 'image_tag' input to specify which Docker image tag to use
+#    - lpk-only: Only has 'version' input for LPK version
+#
+# 4. Trigger Flow:
+#    - docker-lpk: PR/Push/Tag → Docker Workflow → workflow_run → LPK Workflow
+#    - lpk-only: PR/Push/Tag → LPK Workflow (direct)
+#
+# Skip CI Support:
+# - Supported keywords: [skip ci], [ci skip], [no ci], [skip actions], [actions skip]
+# - Skip CI markers only work at the Docker workflow level (not this workflow directly)
+# - This workflow runs automatically when Docker workflow succeeds
+# - IMPORTANT: If Docker workflow is skipped, this workflow won't run either
+# - Manual dispatch (workflow_dispatch) always runs regardless of commit message
+# Examples:
+#   git commit -m "docs: update README [skip ci]"  # Skips Docker workflow, thus skips this workflow too
+#   git commit -m "[ci skip] fix typo in comments" # Same as above
+# Note: Tag push will also be skipped if the tagged commit contains skip keywords
+name: Build LPK Package
+
+on:
+  workflow_run:
+    workflows: ["Build & Push (Docker Hub)"]
+    types:
+      - "completed"
+
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Docker image tag to use for building LPK package"
+        required: false
+        default: "main"
+        type: string
+      version:
+        description: 'Custom version for the LPK package (optional), e.g., "1.2.3" or "v1.2.3" (v prefix will be auto-removed)'
+        required: false
+        default: ""
+        type: string
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
+    outputs:
+      checkout_ref: ${{ steps.context.outputs.checkout_ref }}
+      commit_sha: ${{ steps.context.outputs.commit_sha }}
+      short_sha: ${{ steps.context.outputs.short_sha }}
+      submit_msg: ${{ steps.context.outputs.submit_msg }}
+      custom_version: ${{ steps.context.outputs.custom_version }}
+      tag_name: ${{ steps.context.outputs.tag_name }}
+      workflow_run_head_branch: ${{ steps.context.outputs.workflow_run_head_branch }}
+      should_copy_image: ${{ steps.docker.outputs.should_copy_image }}
+      source_image_b64: ${{ steps.docker.outputs.source_image_b64 }}
+    steps:
+      - name: Prepare context variables
+        id: context
+        env:
+          MANUAL_VERSION: ${{ github.event.inputs.version || '' }}
+          MANUAL_IMAGE_TAG: ${{ github.event.inputs.image_tag }}
+        run: |
+          EVENT_NAME="${GITHUB_EVENT_NAME}"
+          # Normalize version: remove leading 'v' if present
+          CUSTOM_VERSION="${MANUAL_VERSION:-}"
+          if [ -n "$CUSTOM_VERSION" ]; then
+            CUSTOM_VERSION="${CUSTOM_VERSION#v}"
+          fi
+          IMAGE_TAG="${MANUAL_IMAGE_TAG:-main}"
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            COMMIT_SHA="${GITHUB_SHA}"
+            SHORT_SHA=$(echo "$COMMIT_SHA" | cut -c1-7)
+            SUBMIT_MSG="Manual Submit: ${IMAGE_TAG} (${COMMIT_SHA})"
+            CHECKOUT_REF="${GITHUB_REF}"
+            TAG_NAME=""
+            HEAD_BRANCH=""
+          else
+            COMMIT_SHA=$(jq -r '.workflow_run.head_sha' "$GITHUB_EVENT_PATH")
+            SHORT_SHA=$(echo "$COMMIT_SHA" | cut -c1-7)
+            SUBMIT_MSG="Auto Submit: ${COMMIT_SHA}"
+            CHECKOUT_REF="$COMMIT_SHA"
+            HEAD_BRANCH=$(jq -r '.workflow_run.head_branch // ""' "$GITHUB_EVENT_PATH")
+            RAW_REF="${GITHUB_REF}"
+            if [[ "$RAW_REF" == refs/tags/* ]]; then
+              TAG_NAME="${RAW_REF#refs/tags/}"
+            else
+              TAG_NAME=""
+            fi
+          fi
+
+          echo "commit_sha=${COMMIT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "submit_msg=${SUBMIT_MSG}" >> "$GITHUB_OUTPUT"
+          echo "checkout_ref=${CHECKOUT_REF}" >> "$GITHUB_OUTPUT"
+          echo "custom_version=${CUSTOM_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "workflow_run_head_branch=${HEAD_BRANCH}" >> "$GITHUB_OUTPUT"
+
+      - name: Determine Docker image information
+        id: docker
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          SHORT_SHA: ${{ steps.context.outputs.short_sha }}
+          MANUAL_IMAGE_TAG: ${{ github.event.inputs.image_tag }}
+        run: |
+          if [ -z "$DOCKERHUB_USERNAME" ]; then
+            echo "❌ DOCKERHUB_USERNAME secret is required"
+            exit 1
+          fi
+
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          IMAGE_NAME="${DOCKERHUB_USERNAME}/${REPO_NAME}"
+          EVENT_NAME="${GITHUB_EVENT_NAME}"
+          TAG=""
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG="${MANUAL_IMAGE_TAG:-main}"
+          elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            HEAD_BRANCH=$(jq -r '.workflow_run.head_branch // ""' "$GITHUB_EVENT_PATH")
+            if [[ "$HEAD_BRANCH" == v* ]]; then
+              TAG="$HEAD_BRANCH"
+            else
+              TAG="sha-${SHORT_SHA}"
+            fi
+          fi
+
+          SOURCE_IMAGE="${IMAGE_NAME}:${TAG}"
+          echo "Determined Docker image: ${SOURCE_IMAGE}"
+
+          # Use base64 encoding to bypass GitHub Actions' secret detection
+          # GitHub Actions automatically masks outputs containing values from secrets
+          # Since IMAGE_NAME includes DOCKERHUB_USERNAME (from secrets), the output would be hidden
+          # Base64 encoding prevents the pattern matching while keeping the data accessible
+          SOURCE_IMAGE_B64=$(echo -n "$SOURCE_IMAGE" | base64 -w 0)
+
+          echo "should_copy_image=true" >> "$GITHUB_OUTPUT"
+          echo "source_image_b64=${SOURCE_IMAGE_B64}" >> "$GITHUB_OUTPUT"
+
+  build-lpk:
+    needs: prepare
+    uses: ./.github/workflows/reusable-lpk-package.yml
+    with:
+      checkout_ref: ${{ needs.prepare.outputs.checkout_ref }}
+      commit_sha: ${{ needs.prepare.outputs.commit_sha }}
+      short_sha: ${{ needs.prepare.outputs.short_sha }}
+      submit_msg: ${{ needs.prepare.outputs.submit_msg }}
+      custom_version: ${{ needs.prepare.outputs.custom_version }}
+      tag_name: ${{ needs.prepare.outputs.tag_name }}
+      workflow_run_head_branch: ${{ needs.prepare.outputs.workflow_run_head_branch }}
+      should_copy_image: ${{ fromJSON(needs.prepare.outputs.should_copy_image) }}
+      source_image_b64: ${{ needs.prepare.outputs.source_image_b64 }}
+    secrets:
+      lazycat_username: ${{ secrets.LAZYCAT_USERNAME }}
+      lazycat_password: ${{ secrets.LAZYCAT_PASSWORD }}

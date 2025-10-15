@@ -1,0 +1,62 @@
+name: Build & Push (Docker Hub)
+
+on:
+  push:
+    branches:
+      - "main"
+      - "main-lazycat"
+    paths:
+      - "**"
+      - ".github/workflows/docker-image.yml"
+    tags:
+      - "v*"
+
+  pull_request:
+    branches:
+      - "main"
+      - "main-lazycat"
+    paths:
+      - "**"
+      - ".github/workflows/docker-image.yml"
+
+  workflow_dispatch:
+    inputs:
+      docker_context:
+        description: "Docker build context path"
+        required: false
+        default: "./backend"
+      dockerfile_path:
+        description: "Path to Dockerfile"
+        required: false
+        default: "./backend/Dockerfile"
+      docker_target:
+        description: "Docker build target stage"
+        required: false
+        default: "prod"
+      enable_go_tests:
+        description: "Enable Go tests before build"
+        required: false
+        type: boolean
+        default: false
+      go_version:
+        description: "Go version for tests"
+        required: false
+        default: "latest"
+      go_test_dir:
+        description: "Directory to run Go tests in"
+        required: false
+        default: "./backend"
+
+jobs:
+  build:
+    uses: ./.github/workflows/reusable-docker-image.yml
+    with:
+      docker_context: ${{ (github.event_name == 'workflow_dispatch' && inputs.docker_context) || (github.event_name != 'workflow_dispatch' && vars.DOCKER_CONTEXT) || './backend' }}
+      dockerfile_path: ${{ (github.event_name == 'workflow_dispatch' && inputs.dockerfile_path) || (github.event_name != 'workflow_dispatch' && vars.DOCKERFILE_PATH) || './backend/Dockerfile' }}
+      docker_target: ${{ (github.event_name == 'workflow_dispatch' && inputs.docker_target) || (github.event_name != 'workflow_dispatch' && vars.DOCKER_TARGET) || 'prod' }}
+      enable_go_tests: ${{ (github.event_name == 'workflow_dispatch' && inputs.enable_go_tests) || (github.event_name != 'workflow_dispatch' && vars.ENABLE_GO_TESTS == 'true') }}
+      go_version: ${{ (github.event_name == 'workflow_dispatch' && inputs.go_version) || (github.event_name != 'workflow_dispatch' && vars.GO_VERSION) || 'latest' }}
+      go_test_dir: ${{ (github.event_name == 'workflow_dispatch' && inputs.go_test_dir) || (github.event_name != 'workflow_dispatch' && vars.GO_TEST_DIR) || './backend' }}
+    secrets:
+      dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
+      dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}

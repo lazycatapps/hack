@@ -1,0 +1,109 @@
+# Lazycat LPK Package Build Workflow
+# Reference: https://lazycat.cloud/playground/guideline/572
+# This workflow builds and publishes Lazycat LPK packages after successful Docker image builds
+#
+# Skip CI Support:
+# - Supported keywords: [skip ci], [ci skip], [no ci], [skip actions], [actions skip]
+# - Applies to ALL push events including branch push AND tag push
+# - Also applies to pull_request events
+# - IMPORTANT: Tag push will also be skipped if the tagged commit contains skip keywords
+# - Manual dispatch (workflow_dispatch) always runs regardless of commit message
+# Examples:
+#   git commit -m "docs: update README [skip ci]"  # Will skip workflow on push AND on any tags from this commit
+#   git commit -m "[ci skip] fix typo in comments" # Will skip workflow on push AND on any tags from this commit
+# Note: If you need a tag to trigger the workflow, ensure the tagged commit does NOT contain skip keywords
+name: Build LPK Package
+
+on:
+  push:
+    branches:
+      - main
+      - main-lazycat
+
+    tags:
+      - 'v*'
+
+  pull_request:
+
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Custom version for the LPK package (optional), e.g., "1.2.3" or "v1.2.3" (v prefix will be auto-removed)'
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      checkout_ref: ${{ steps.context.outputs.checkout_ref }}
+      commit_sha: ${{ steps.context.outputs.commit_sha }}
+      short_sha: ${{ steps.context.outputs.short_sha }}
+      submit_msg: ${{ steps.context.outputs.submit_msg }}
+      custom_version: ${{ steps.context.outputs.custom_version }}
+      tag_name: ${{ steps.context.outputs.tag_name }}
+      workflow_run_head_branch: ${{ steps.context.outputs.workflow_run_head_branch }}
+      should_copy_image: ${{ steps.context.outputs.should_copy_image }}
+    steps:
+      - name: Prepare context variables
+        id: context
+        env:
+          MANUAL_VERSION: ${{ github.event.inputs.version || '' }}
+        run: |
+          EVENT_NAME="${GITHUB_EVENT_NAME}"
+          # Normalize version: remove leading 'v' if present
+          CUSTOM_VERSION="${MANUAL_VERSION}"
+          if [ -n "$CUSTOM_VERSION" ]; then
+            CUSTOM_VERSION="${CUSTOM_VERSION#v}"
+          fi
+          CHECKOUT_REF=""
+          HEAD_BRANCH=""
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            COMMIT_SHA="${GITHUB_SHA}"
+            SUBMIT_MSG="Manual Submit: ${COMMIT_SHA}"
+          elif [ "$EVENT_NAME" = "pull_request" ]; then
+            COMMIT_SHA=$(jq -r '.pull_request.head.sha' "$GITHUB_EVENT_PATH")
+            SUBMIT_MSG="PR Submit: ${COMMIT_SHA}"
+          else
+            COMMIT_SHA="${GITHUB_SHA}"
+            SUBMIT_MSG="Auto Submit: ${COMMIT_SHA}"
+          fi
+
+          SHORT_SHA=$(echo "$COMMIT_SHA" | cut -c1-7)
+
+          TAG_NAME=""
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+          fi
+
+          if [ -n "$CUSTOM_VERSION" ]; then
+            echo "Detected custom version input: ${CUSTOM_VERSION}"
+          fi
+
+          echo "commit_sha=${COMMIT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "submit_msg=${SUBMIT_MSG}" >> "$GITHUB_OUTPUT"
+          echo "checkout_ref=${CHECKOUT_REF}" >> "$GITHUB_OUTPUT"
+          echo "custom_version=${CUSTOM_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "workflow_run_head_branch=${HEAD_BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "should_copy_image=false" >> "$GITHUB_OUTPUT"
+
+  build-lpk:
+    needs: prepare
+    uses: ./.github/workflows/reusable-lpk-package.yml
+    with:
+      checkout_ref: ${{ needs.prepare.outputs.checkout_ref }}
+      commit_sha: ${{ needs.prepare.outputs.commit_sha }}
+      short_sha: ${{ needs.prepare.outputs.short_sha }}
+      submit_msg: ${{ needs.prepare.outputs.submit_msg }}
+      custom_version: ${{ needs.prepare.outputs.custom_version }}
+      tag_name: ${{ needs.prepare.outputs.tag_name }}
+      workflow_run_head_branch: ${{ needs.prepare.outputs.workflow_run_head_branch }}
+      should_copy_image: ${{ fromJSON(needs.prepare.outputs.should_copy_image) }}
+      source_image_b64: ""
+    secrets:
+      lazycat_username: ${{ secrets.LAZYCAT_USERNAME }}
+      lazycat_password: ${{ secrets.LAZYCAT_PASSWORD }}
