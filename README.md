@@ -75,6 +75,8 @@ GIT_USER_NAME="John Doe" GIT_USER_EMAIL="john@example.com" \
   bash <(curl -fsSL https://raw.githubusercontent.com/lazycatapps/hack/main/scripts/lazycli.sh)
 ```
 
+如果你需要自定义应用 ID 前缀，可以在运行脚本前导出 `APP_ID_PREFIX` 环境变量；初始化步骤会将生成的 `Makefile` 更新为使用该值。
+
 通过在命令前注入 `GIT_USER_NAME`、`GIT_USER_EMAIL` 环境变量，可以在远程执行脚本时写入指定的 Git 用户信息，方便在新仓库中直接使用。
 
 ## 使用 base.mk

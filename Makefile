@@ -5,6 +5,7 @@
 # PROJECT_NAME ?= your-project  # defaults to current directory name
 # Project type (lpk-only | docker-lpk)
 PROJECT_TYPE ?= docker-lpk
+APP_ID_PREFIX = cloud.lazycat.app.
 
 # Version (optional, auto-detected from git if not set)
 # VERSION := 1.0.0

@@ -20,6 +20,7 @@ GIT_USER_EMAIL="${GIT_USER_EMAIL:-user@users.noreply.github.com}"
 SYNC_INCLUDE_INIT_FILES="false"
 SYNC_SELECTED_TARGET=""
 SYNC_WORKFLOW_TYPE=""
+INIT_APP_ID_PREFIX="${APP_ID_PREFIX:-}"
 
 # CLI state placeholders (populated during argument parsing)
 CLI_MODE="interactive"
@@ -51,6 +52,17 @@ print_info() { echo -e "\033[34m[INFO]\033[0m $*"; }
 print_success() { echo -e "\033[32m[SUCCESS]\033[0m $*"; }
 print_error() { echo -e "\033[31m[ERROR]\033[0m $*" >&2; }
 print_warning() { echo -e "\033[33m[WARNING]\033[0m $*"; }
+
+run_sed_in_place() {
+    local target="$1"
+    shift
+
+    if [[ "${OSTYPE-}" == "darwin"* ]]; then
+        sed -i "" "$@" "$target"
+    else
+        sed -i "$@" "$target"
+    fi
+}
 
 missing_option_value() {
     local option="$1"
@@ -620,7 +632,7 @@ sync_asset() {
         should_copy="true"
     fi
 
-    local copied="false"
+    local asset_copied="false"
 
     if [ "$should_copy" != "true" ]; then
         if is_truthy "$preserve_hint"; then
@@ -651,12 +663,12 @@ sync_asset() {
             print_error "Failed to place $label at $target"
             exit 1
         fi
-        copied="true"
+        asset_copied="true"
         print_success "$label copied"
     fi
 
     if [ -n "$copied_var" ]; then
-        printf -v "$copied_var" '%s' "$copied"
+        printf -v "$copied_var" '%s' "$asset_copied"
     fi
 
     unset SYNC_ASSET_FORCE_OVERRIDE
@@ -786,6 +798,15 @@ copy_makefile() {
             exit 1
         fi
         print_info "Updated Makefile PROJECT_TYPE to ${project_type}"
+    fi
+
+    print_info "Checking APP_ID_PREFIX configuration... copied=$copied, mode=$mode, INIT_APP_ID_PREFIX=$INIT_APP_ID_PREFIX"
+    if [ "$copied" = "true" ] && [ "$mode" = "$MODE_INIT" ] && [ -n "$INIT_APP_ID_PREFIX" ]; then
+        if ! run_sed_in_place "Makefile" "-e" "s/^[[:space:]]*APP_ID_PREFIX[[:space:]]*[?:]*=.*/APP_ID_PREFIX ?= ${INIT_APP_ID_PREFIX}/"; then
+            print_error "Failed to persist APP_ID_PREFIX in Makefile"
+            exit 1
+        fi
+        print_info "Persisted APP_ID_PREFIX to Makefile"
     fi
 }
 
@@ -984,6 +1005,7 @@ quick_init() {
     local type_display
     type_display=$(project_type_display_name "$type") || type_display="$type"
     echo "  Project type: $type_display"
+    echo "  App ID prefix: $INIT_APP_ID_PREFIX"
     echo ""
     do_init "$project_name" "$type"
 }
@@ -1189,6 +1211,7 @@ Environment Variables:
   HACK_REPO_MODE      Force mode detection (local | remote, default: auto)
   GIT_USER_NAME       Git user name (default: user)
   GIT_USER_EMAIL      Git user email (default: user@users.noreply.github.com)
+  APP_ID_PREFIX       Application ID prefix persisted to Makefile during init
 
 Examples:
   # Interactive mode
