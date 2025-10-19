@@ -1,5 +1,18 @@
 # Hack
 
+## TL;DR
+
+```bash
+# 1. 创建 LPK 项目
+bash <(curl -fsSL https://raw.githubusercontent.com/lazycatapps/hack/main/scripts/lazycli.sh) --type lpk-only --name my-library
+
+# 2. 创建 Docker + LPK 项目
+bash <(curl -fsSL https://raw.githubusercontent.com/lazycatapps/hack/main/scripts/lazycli.sh) --type docker-lpk --name my-service
+
+# 3. 同步配置到现有项目
+bash <(curl -fsSL https://raw.githubusercontent.com/lazycatapps/hack/main/scripts/lazycli.sh) --sync
+```
+
 ## 概述
 
 Hack 是 LazyCAT Apps 组织的统一模板仓库，用于快速初始化项目、共享可复用的 Makefile 规则以及 GitHub Actions 工作流。通过引入本仓库提供的脚本与模板，可以在不同项目之间保持一致的工程结构与自动化能力。
@@ -53,8 +66,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/lazycatapps/hack/main/script
 若希望在同步阶段一并覆盖初始化时才生成的触发文件（如 `docker-image.yml`），可以额外传入 `--sync-include-init`：
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/lazycatapps/hack/main/scripts/lazycli.sh) \
-  --sync --sync-include-init
+bash <(curl -fsSL https://raw.githubusercontent.com/lazycatapps/hack/main/scripts/lazycli.sh) --sync --sync-include-init
 ```
 
 通过进程替换的方式执行脚本可以保留交互体验；若你在 CI 等非交互场景需要运行同步，也可以显式传入 `--sync-target`（`all`、`makefile`、`workflows`、`configs`）以及 `--sync-workflow-type`（用于 `workflows` 场景）：
