@@ -38,7 +38,7 @@
 
 # base.mk metadata
 BASE_MK_PATH := $(abspath $(lastword $(filter %base.mk,$(MAKEFILE_LIST))))
-BASE_MK_VERSION := 2025-10-15 23:45:19
+BASE_MK_VERSION := 2025-10-20 19:00:00
 SYNC_TARGET ?= all
 LAZYCLI_SYNC_SCRIPT_URL ?= https://raw.githubusercontent.com/lazycatapps/hack/main/scripts/lazycli.sh
 LAZYCLI_LOCAL_SCRIPT ?= ../hack/scripts/lazycli.sh
@@ -223,6 +223,11 @@ clean-default: ## Clean build artifacts
 
 ifeq ($(PROJECT_TYPE),docker-lpk)
 
+# Container management configuration
+CONTAINER_NAME ?= $(PROJECT_NAME)
+CONTAINER_SHELL ?= /bin/sh
+DOCKER_RUN_ARGS ?=
+
 .PHONY: docker-build-default
 docker-build-default: ## Build Docker image
 	@$(call print_info,Building Docker image: $(FULL_IMAGE_NAME))
@@ -239,6 +244,40 @@ docker-push-default: docker-build-default ## Push Docker image to registry
 docker-run-default: ## Run Docker container locally
 	@$(call print_info,Running Docker container...)
 	docker run --rm -it $(FULL_IMAGE_NAME)
+
+##@ Container Management (docker-lpk projects only)
+
+.PHONY: run-default
+run-default: ## Run container locally
+	@$(call print_info,Ensuring container $(CONTAINER_NAME) is running...)
+	@if [ -n "$$(docker ps -q --filter 'name=^$(CONTAINER_NAME)$$')" ]; then \
+		echo "Container $(CONTAINER_NAME) already running. Skipping restart."; \
+	else \
+		if [ -n "$$(docker ps -aq --filter 'name=^$(CONTAINER_NAME)$$')" ]; then \
+			echo "Removing existing container $(CONTAINER_NAME)..."; \
+			docker rm $(CONTAINER_NAME) >/dev/null; \
+		fi; \
+		docker run -d --name $(CONTAINER_NAME) $(DOCKER_RUN_ARGS) $(FULL_IMAGE_NAME); \
+	fi
+	@$(call print_success,Container ready!)
+
+.PHONY: stop-default
+stop-default: ## Stop and remove container
+	@$(call print_info,Stopping container...)
+	-docker stop $(CONTAINER_NAME)
+	-docker rm $(CONTAINER_NAME)
+	@$(call print_success,Container stopped!)
+
+.PHONY: restart-default
+restart-default: stop-default run-default ## Restart container
+
+.PHONY: logs-default
+logs-default: ## Show container logs
+	docker logs -f $(CONTAINER_NAME)
+
+.PHONY: shell-default
+shell-default: ## Open shell in running container
+	docker exec -it $(CONTAINER_NAME) $(CONTAINER_SHELL)
 
 endif
 

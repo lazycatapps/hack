@@ -800,13 +800,15 @@ copy_makefile() {
         print_info "Updated Makefile PROJECT_TYPE to ${project_type}"
     fi
 
-    print_info "Checking APP_ID_PREFIX configuration... copied=$copied, mode=$mode, INIT_APP_ID_PREFIX=$INIT_APP_ID_PREFIX"
-    if [ "$copied" = "true" ] && [ "$mode" = "$MODE_INIT" ] && [ -n "$INIT_APP_ID_PREFIX" ]; then
-        if ! run_sed_in_place "Makefile" "-e" "s/^[[:space:]]*APP_ID_PREFIX[[:space:]]*[?:]*=.*/APP_ID_PREFIX ?= ${INIT_APP_ID_PREFIX}/"; then
-            print_error "Failed to persist APP_ID_PREFIX in Makefile"
-            exit 1
+    print_info "Checking APP_ID_PREFIX configuration... copied=$copied, mode=$mode, include_init=$include_init, INIT_APP_ID_PREFIX=$INIT_APP_ID_PREFIX"
+    if [ "$copied" = "true" ] && [ -n "$INIT_APP_ID_PREFIX" ]; then
+        if [ "$mode" = "$MODE_INIT" ] || [ "$include_init" = "true" ]; then
+            if ! run_sed_in_place "Makefile" "-e" "s/^[[:space:]]*APP_ID_PREFIX[[:space:]]*[?:]*=.*/APP_ID_PREFIX ?= ${INIT_APP_ID_PREFIX}/"; then
+                print_error "Failed to persist APP_ID_PREFIX in Makefile"
+                exit 1
+            fi
+            print_info "Persisted APP_ID_PREFIX to Makefile"
         fi
-        print_info "Persisted APP_ID_PREFIX to Makefile"
     fi
 }
 
