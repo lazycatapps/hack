@@ -299,13 +299,22 @@ deploy-default: lpk-default ## Build and install LPK package
 		exit 1; \
 	fi; \
 	echo "Installing $$LPK_FILE..."; \
-	lzc-cli app install "$$LPK_FILE"
+	if command -v lpk-manager >/dev/null 2>&1; then \
+		LPK_PATH=$$(realpath "$$LPK_FILE"); \
+		lpk-manager install "$$LPK_PATH"; \
+	else \
+		lzc-cli app install "$$LPK_FILE"; \
+	fi
 	@$(call print_success,Installation completed)
 
 .PHONY: uninstall-default
 uninstall-default: ## Uninstall the LPK package
 	@$(call print_info,Uninstalling $(APP_ID)...)
-	lzc-cli app uninstall $(APP_ID)
+	@if command -v lpk-manager >/dev/null 2>&1; then \
+		lpk-manager uninstall $(APP_ID); \
+	else \
+		lzc-cli app uninstall $(APP_ID); \
+	fi
 	@$(call print_success,Uninstallation completed)
 
 .PHONY: list-packages-default
