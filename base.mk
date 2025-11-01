@@ -38,7 +38,7 @@
 
 # base.mk metadata
 BASE_MK_PATH := $(abspath $(lastword $(filter %base.mk,$(MAKEFILE_LIST))))
-BASE_MK_VERSION := 2025-10-20 19:00:00
+BASE_MK_VERSION := 2025-11-01 11:00:00
 SYNC_TARGET ?= all
 LAZYCLI_SYNC_SCRIPT_URL ?= https://raw.githubusercontent.com/lazycatapps/hack/main/scripts/lazycli.sh
 LAZYCLI_LOCAL_SCRIPT ?= ../hack/scripts/lazycli.sh
@@ -308,14 +308,25 @@ deploy-default: lpk-default ## Build and install LPK package
 	@$(call print_success,Installation completed)
 
 .PHONY: uninstall-default
-uninstall-default: ## Uninstall the LPK package
-	@$(call print_info,Uninstalling $(APP_ID)...)
+uninstall-default: ## Uninstall the LPK package (data preserved)
+	@$(call print_info,Uninstalling $(APP_ID) (data will be preserved)...)
 	@if command -v lpk-manager >/dev/null 2>&1; then \
 		lpk-manager uninstall $(APP_ID); \
 	else \
 		lzc-cli app uninstall $(APP_ID); \
 	fi
 	@$(call print_success,Uninstallation completed)
+
+.PHONY: uninstall-clean-default
+uninstall-clean-default: ## Uninstall the LPK package and delete all data
+	@$(call print_warning,Uninstalling $(APP_ID) and DELETING ALL DATA...)
+	@printf "%b[WARNING]%b This will permanently delete all application data!\\n" "$(COLOR_WARNING)" "$(COLOR_RESET)"
+	@if command -v lpk-manager >/dev/null 2>&1; then \
+		lpk-manager uninstall --delete-data $(APP_ID); \
+	else \
+		lzc-cli app uninstall --delete-data $(APP_ID); \
+	fi
+	@$(call print_success,Uninstallation with data deletion completed)
 
 .PHONY: list-packages-default
 list-packages-default: ## List all LPK packages in current directory
