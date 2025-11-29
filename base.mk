@@ -1,11 +1,11 @@
-# base.mk - Common Makefile for LazyCAT Apps projects
+# base.mk - Common Makefile for Lazycat Apps projects
 # This file should be included in your project's Makefile
 #
 # Required tools:
-#   lzc-cli         - LazyCAT CLI tool
+#   lzc-cli         - Lazycat CLI tool
 #                     Install: npm install -g @lazycatcloud/lzc-cli
 #                     Auto-completion: lzc-cli completion >> ~/.zshrc
-#   docker2lzc      - Docker manifest converter for LazyCAT projects
+#   docker2lzc      - Docker manifest converter for Lazycat projects
 #                     Install: npm install -g docker2lzc
 #
 # Required variables (define in your Makefile):
@@ -68,7 +68,7 @@ ifndef APP_ID
     APP_ID := $(APP_ID_PREFIX)$(APP_NAME)
 endif
 
-# LazyCAT Box configuration
+# Lazycat Box configuration
 LAZYCAT_BOX_FALLBACK ?= 0
 ifndef LAZYCAT_BOX_NAME
     LAZYCAT_BOX_NAME := $(shell command -v lzc-cli >/dev/null 2>&1 && lzc-cli box default 2>/dev/null)
@@ -93,7 +93,7 @@ ifndef REGISTRY
 endif
 
 ifeq ($(LAZYCAT_BOX_FALLBACK),1)
-$(warning LazyCAT box name was not auto-detected; install lzc-cli or set LAZYCAT_BOX_NAME/REGISTRY to avoid using the fallback settings.)
+$(warning Lazycat box name was not auto-detected; install lzc-cli or set LAZYCAT_BOX_NAME/REGISTRY to avoid using the fallback settings.)
 endif
 
 ifdef REGISTRY
@@ -201,7 +201,7 @@ ifeq ($(PROJECT_TYPE),docker-lpk)
 	@$(call print_info,Image: $(FULL_IMAGE_NAME))
 endif
 ifeq ($(LAZYCAT_BOX_FALLBACK),1)
-	@$(call print_warning,LazyCAT box name not detected. Install lzc-cli or set LAZYCAT_BOX_NAME/REGISTRY for Docker workflows.)
+	@$(call print_warning,Lazycat box name not detected. Install lzc-cli or set LAZYCAT_BOX_NAME/REGISTRY for Docker workflows.)
 endif
 
 ##@ Building
@@ -286,7 +286,7 @@ endif
 .PHONY: lpk-default
 lpk-default: ## Package LPK
 	@$(call print_info,Building LPK package...)
-	@command -v lzc-cli >/dev/null 2>&1 || ($(call print_error,lzc-cli not found. Please install LazyCAT CLI) && exit 1)
+	@command -v lzc-cli >/dev/null 2>&1 || ($(call print_error,lzc-cli not found. Please install Lazycat CLI) && exit 1)
 	lzc-cli project build
 	@$(call print_success,LPK package built successfully)
 
@@ -394,11 +394,11 @@ install-lzc-cli-default: ## Install lzc-cli tool
 	@$(call print_info,To enable auto-completion, run: lzc-cli completion >> ~/.zshrc)
 
 .PHONY: appstore-login-default
-appstore-login-default: ## Log into LazyCAT App Store using lzc-cli
-	@$(call print_info,Attempting LazyCAT App Store login)
-	@command -v lzc-cli >/dev/null 2>&1 || ($(call print_error,lzc-cli not found. Please install LazyCAT CLI) && exit 1)
+appstore-login-default: ## Log into Lazycat App Store using lzc-cli
+	@$(call print_info,Attempting Lazycat App Store login)
+	@command -v lzc-cli >/dev/null 2>&1 || ($(call print_error,lzc-cli not found. Please install Lazycat CLI) && exit 1)
 	@lzc-cli appstore login
-	@$(call print_success,Authenticated with LazyCAT App Store)
+	@$(call print_success,Authenticated with Lazycat App Store)
 
 .PHONY: version-default
 version-default: ## Show version
@@ -407,10 +407,15 @@ version-default: ## Show version
 .PHONY: check-tools-default
 check-tools-default: ## Check if required tools are installed
 	@$(call print_info,Checking required tools...)
-	@command -v lzc-cli >/dev/null 2>&1 || ($(call print_error,lzc-cli not found) && exit 1)
+	@command -v bash >/dev/null 2>&1 && $(call print_success,bash detected) || ($(call print_error,bash not found) && exit 1)
+	@command -v curl >/dev/null 2>&1 && $(call print_success,curl detected) || ($(call print_error,curl not found) && exit 1)
+	@command -v make >/dev/null 2>&1 && $(call print_success,make detected) || ($(call print_error,make not found) && exit 1)
+	@command -v lzc-cli >/dev/null 2>&1 && $(call print_success,lzc-cli detected) || ($(call print_error,lzc-cli not found) && exit 1)
 ifeq ($(PROJECT_TYPE),docker-lpk)
-	@command -v docker2lzc >/dev/null 2>&1 || ($(call print_error,docker2lzc not found. Run make install-docker2lzc) && exit 1)
-	@command -v docker >/dev/null 2>&1 || ($(call print_error,docker not found) && exit 1)
+	@command -v docker2lzc >/dev/null 2>&1 && $(call print_success,docker2lzc detected) || ($(call print_error,docker2lzc not found. Run make install-docker2lzc) && exit 1)
+	@command -v docker >/dev/null 2>&1 && $(call print_success,docker detected) || ($(call print_error,docker not found) && exit 1)
+else
+	@$(call print_info,Skipping Docker tool checks (PROJECT_TYPE=$(PROJECT_TYPE)))
 endif
 	@$(call print_success,All required tools are installed)
 

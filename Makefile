@@ -1,4 +1,4 @@
-# Example Makefile for a LazyCAT Apps project
+# Example Makefile for a Lazycat Apps project
 # Copy this file to your project and customize the variables below
 
 # Project configuration
