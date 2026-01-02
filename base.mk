@@ -88,7 +88,7 @@ ifndef REGISTRY
     ifeq ($(LAZYCAT_BOX_FALLBACK),1)
         REGISTRY :=
     else
-        REGISTRY := docker-registry-ui.$(LAZYCAT_BOX_NAME).heiyu.space
+        REGISTRY := registry.$(LAZYCAT_BOX_NAME).heiyu.space
     endif
 endif
 
